@@ -1,0 +1,102 @@
+# ------------------------------
+# Ollama Deployment + Service
+# ------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          args: ["serve"]
+          ports:
+            - containerPort: 11434
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0"       # Listen on all interfaces
+            - name: OLLAMA_ORIGINS
+              value: "*"             # Allow CORS from anywhere
+            - name: OLLAMA_MULTIUSER_CACHE
+              value: "false"
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1"
+            limits:
+              memory: "8Gi"
+              cpu: "2"
+          volumeMounts:
+            - mountPath: /root/.ollama
+              name: ollama-storage
+      volumes:
+        - name: ollama-storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+spec:
+  type: LoadBalancer    # Public ELB
+  ports:
+    - port: 11434
+      targetPort: 11434
+  selector:
+    app: ollama
+
+# ------------------------------
+# Open-WebUI Deployment + Service
+# ------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-webui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open-webui
+  template:
+    metadata:
+      labels:
+        app: open-webui
+    spec:
+      containers:
+        - name: open-webui
+          image: ghcr.io/open-webui/open-webui:latest
+          ports:
+            - containerPort: 8080
+          env:
+            # Replace this URL after deploying Ollama and checking its public ELB
+            - name: OLLAMA_API_BASE_URL
+              value: "http://ollama:11434"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-webui
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: open-webui
